@@ -1,0 +1,121 @@
+#!/bin/bash
+
+BackupFolder=/www/web
+ZiptoFolder=/backup/UploadToBaiduyun/web_folder_7z
+Date_day=`date +%Y%m%d`
+Password= #password removed
+Volume=50m
+LogFile=/var/log/7z.log
+ErrLog=$ZiptoFolder/$Date_day/7z.err.log
+
+MYSQL_USER=root
+MYSQL_PASS= #password removed
+MAIL_TO= # email removed
+
+
+###############initial function############
+initial() {
+        #stop ali monitor
+        /etc/init.d/aegis stop
+
+        #clear LogFile
+        echo "" > $LogFile
+        #Remove all folders standard by 201x in zip folder to avoid delete other files
+        cd $ZiptoFolder
+        rm -Rf 20*
+
+        #create backup folder
+        Error=0
+        mkdir -p $ZiptoFolder/$Date_day/
+        echo `date`: start > $ErrLog
+}
+
+####################Backup /etc/####################################
+backup_etc() {
+        mkdir -p $ZiptoFolder/$Date_day/etc
+        cd $ZiptoFolder/$Date_day/etc
+
+        nice -19 7z -p$Password a etc_all /etc >> $LogFile
+
+        if [ $? -eq 0 ]
+        then
+                        echo `date`: Successful: /etc backup successful >> $ErrLog
+        else
+                        Error=$(($Error+1))
+                        echo `date`: Error!!!!!: code $?: /etc backup >> $ErrLog
+        fi
+}
+
+
+#########################Backup the data based, each database a file
+backup_mysql(){
+        mkdir -p $ZiptoFolder/$Date_day/00-Mysql
+        cd $ZiptoFolder/$Date_day/00-Mysql
+        /www/wdlinux/mysql/bin/mysql -u$MYSQL_USER -p$MYSQL_PASS -B -N -e 'SHOW DATABASES' | xargs > mysqldata
+        sed -i 's/information_schema //g' mysqldata
+        sed -i 's/performance_schema //g' mysqldata
+        sed -i 's/mysql //g' mysqldata
+        for db in `cat mysqldata`; do
+                (/www/wdlinux/mysql/bin/mysqldump -u$MYSQL_USER -p$MYSQL_PASS --lock-tables=false --databases ${db}> ${db}.sql)
+        done
+
+        nice -19 7z -p$Password -v$Volume a Mysql_all *.sql >> $LogFile
+
+        if [ $? -eq 0 ]
+        then
+                        echo `date`: Successful: Mysql backup successful >> $ErrLog
+        else
+                        Error=$(($Error+1))
+                        echo `date`: Error!!!!!: code $?: Mysql backup >> $ErrLog
+        fi
+
+        rm *.sql mysqldata
+}
+
+
+#################Backup folder#####################################
+backup_folder() {
+        #go to backup folder
+        cd $BackupFolder
+
+        for i in */
+        do
+                        abc=${i::-1}
+                        date >> $LogFile
+                        nice -19 7z -p$Password -v$Volume a $ZiptoFolder/$Date_day/$abc/$abc $BackupFolder/$i >> $LogFile
+                        if [ $? -eq 0 ]
+                        then
+                                        echo `date`: $BackupFolder/$i backup successful >> $ErrLog
+                        else
+                                        Error=$(($Error+1))
+                                        echo `date`: $BackupFolder/$i backup !!!!!!error!!!!!! with code $? >> $ErrLog
+                        fi
+        done
+
+        echo `date`: END >> $ErrLog
+}
+#######################restore environment###################
+restore_environment() {
+        #Enable ali monitor
+        /etc/init.d/aegis start
+}
+#####################send report##################################
+send_report() {
+        Title="7zip log of yeff server - "`date`
+        if [ $Error -eq 0 ]
+        then
+                        Title="Successful: "$Title
+        else
+                        Title=$Error" errors: "$Title
+        fi
+
+        cat $ErrLog | /usr/bin/mutt $MAIL_TO -s "$Title"
+}
+
+############################program start here#############################
+initial
+backup_etc
+backup_mysql
+backup_folder
+restore_environment
+send_report
