@@ -6,7 +6,7 @@ TARGET_SERVER_PORT=${3}
 TARGET_FOLDER=${4}
 
 if [[ $# != 4 ]]; then
-	echo "usage ${0} [Source_Folder] [TARGET_FOLDER] [TARGET_SERVER_PORT] [TARGET_FOLDER]"
+	echo "usage ${0} [Source_Folder] [TARGET_SERVER] [TARGET_SERVER_PORT] [TARGET_FOLDER]"
 	exit 1
 fi
 
