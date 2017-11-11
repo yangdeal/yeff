@@ -14,6 +14,7 @@ rsync_folder () {
 	FOLDER=${1}
 	exit_status=1
 	while [ $exit_status -ne 0 ]; do
+	    date
 	    rsync -avz --progress -e "ssh -p ${TARGET_SERVER_PORT}" ${FOLDER} ${TARGET_SERVER}::NetBackup/${TARGET_FOLDER}
 	    exit_status=$?
 	    echo +++++ rsync folder ${FOLDER} with exit code: ${exit_status}
